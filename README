@@ -1,0 +1,24 @@
+Just a quick tool to monitor a list on a redis server (in) using blpop, then add the popped key/value to another redis (out).
+
+Usage:
+
+	./blpop-proxy in_host:port out_host:port listkey1 listkey2 listkeyN
+
+
+Example:
+
+	./blpop-proxy 172.16.0.2:6379 10.0.3.2:6379 hi test ping queue bang
+
+	This would monitor 172.16.0.2:6379 for push's made to the following keys: hi, test, ping, queue, and bang. Once our BLPop returns, we then RPush the retrieved {key,value} to 10.0.3.2:6379.
+
+
+Uses:
+
+	Allow an "untrusted" environment to access production resque queues on a quarantined redis-server.
+
+
+It handles all of the faults i've encountered. It also logs to "blpop-proxy.lost.log" when a BLPop succeeds but the RPush does not. It then blocks all operation (including BLPop's) until we are able to re-connect to the "out" server. This way, we don't lose any keys.
+
+Pc.
+
+-- ad
