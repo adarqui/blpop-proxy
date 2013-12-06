@@ -1,3 +1,4 @@
 blpop-proxy
 pkg
 src
+blpop-proxy.lost.log
