@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"strings"
-	"strconv"
-	"time"
 	"menteslibres.net/gosexy/redis"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
 /*
@@ -15,7 +15,7 @@ import (
  */
 
 type Redis_Pop struct {
-	Key string
+	Key   string
 	Value string
 }
 
@@ -26,10 +26,10 @@ type Redis_Params struct {
 
 type Router struct {
 	In_Params *Redis_Params
-	In *redis.Client
+	In        *redis.Client
 
 	Out_Params *Redis_Params
-	Out *redis.Client
+	Out        *redis.Client
 
 	Log_Lost *os.File
 }
@@ -38,27 +38,27 @@ func usage() {
 	log.Fatal("usage: ./blproxy <in_redis:port> <out_redis:port>")
 }
 
-func log_lost_init() (*os.File) {
-	f, err := os.OpenFile("blpop-proxy.lost.log", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660);
+func log_lost_init() *os.File {
+	f, err := os.OpenFile("blpop-proxy.lost.log", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
 	if err != nil {
-		log.Fatal("log_lost_init:OpenFile:blpop-proxy.lost.log:Err:",err)
+		log.Fatal("log_lost_init:OpenFile:blpop-proxy.lost.log:Err:", err)
 	}
 	return f
 }
 
 func redis_parse_host_port(Arg string, RP *Redis_Params) {
-	in_arr := strings.Split(Arg,":")
+	in_arr := strings.Split(Arg, ":")
 
 	RP.Host = in_arr[0]
-	port,err := strconv.Atoi(in_arr[1])
+	port, err := strconv.Atoi(in_arr[1])
 	if err != nil {
-		redis_error("redis_parse_host_port:strconv:Err:",err)
+		redis_error("redis_parse_host_port:strconv:Err:", err)
 	}
 
 	RP.Port = uint(port)
 }
 
-func redis_init() (*Router) {
+func redis_init() *Router {
 
 	R := new(Router)
 	R.In = redis.New()
@@ -79,14 +79,14 @@ func (R *Router) redis_fini() {
 }
 
 func redis_error(S string, E error) {
-	log.Fatal(S,E)
+	log.Fatal(S, E)
 }
 
-func (R *Router) redis_connect_in() (error) {
+func (R *Router) redis_connect_in() error {
 
 	err := R.In.ConnectNonBlock(R.In_Params.Host, R.In_Params.Port)
 	if err != nil {
-		log.Printf("redis_connect:In:Err:%q",err)
+		log.Printf("redis_connect:In:Err:%q", err)
 		return err
 	}
 	log.Printf("redis_connect:In:Connected to %v\n", R.In_Params)
@@ -94,12 +94,11 @@ func (R *Router) redis_connect_in() (error) {
 	return nil
 }
 
-
-func (R *Router) redis_connect_out() (error) {
+func (R *Router) redis_connect_out() error {
 
 	err := R.Out.Connect(R.Out_Params.Host, R.Out_Params.Port)
 	if err != nil {
-		log.Printf("redis_connect:Out:Err:%q",err)
+		log.Printf("redis_connect:Out:Err:%q", err)
 		return err
 	}
 	log.Printf("redis_connect:Out:Connected to %v\n", R.Out_Params)
@@ -107,14 +106,12 @@ func (R *Router) redis_connect_out() (error) {
 	return nil
 }
 
-
-
 func (R *Router) redis_pop_in(C chan *Redis_Pop, Keys []string) {
 	for {
-		res,err := R.In.BLPop(5, Keys...)
+		res, err := R.In.BLPop(5, Keys...)
 		if err != nil {
-			log.Printf("redis_pop_in:BLPop:Err:%q\n",err)
-			time.Sleep(1*time.Second)
+			log.Printf("redis_pop_in:BLPop:Err:%q\n", err)
+			time.Sleep(1 * time.Second)
 			R.redis_connect_in()
 			continue
 		}
@@ -123,7 +120,7 @@ func (R *Router) redis_pop_in(C chan *Redis_Pop, Keys []string) {
 			continue
 		}
 
-		pop := Redis_Pop{res[0],res[1]}
+		pop := Redis_Pop{res[0], res[1]}
 		C <- &pop
 	}
 }
@@ -140,14 +137,14 @@ func (R *Router) redis_push_out(C chan *Redis_Pop) {
 			if err != nil {
 				/* save locally, try reconnecting */
 				if logged == false {
-					R.Log_Lost.WriteString(fmt.Sprintf("%q\n",message))
+					R.Log_Lost.WriteString(fmt.Sprintf("%q\n", message))
 					logged = true
 				}
 				for {
 					/* Reconnect loop */
 					err := R.redis_connect_out()
 					if err != nil {
-						time.Sleep(1*time.Second)
+						time.Sleep(1 * time.Second)
 						continue
 					} else {
 						break
@@ -157,10 +154,9 @@ func (R *Router) redis_push_out(C chan *Redis_Pop) {
 				break
 			}
 		}
-		
+
 	}
 }
-
 
 func main() {
 
@@ -177,9 +173,9 @@ func main() {
 	R.Log_Lost = log_lost_init()
 
 	/* Limit of 1 to ensure we don't pop jobs when "out" is disconnected */
-	C := make(chan *Redis_Pop,1)
+	C := make(chan *Redis_Pop, 1)
 	go R.redis_pop_in(C, keys)
 	go R.redis_push_out(C)
 
-	select { }
+	select {}
 }
