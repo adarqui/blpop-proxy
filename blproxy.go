@@ -172,7 +172,7 @@ func (R *Router) redis_push_out(C chan *Redis_Pop) {
 			if err != nil {
 				/* save locally, try reconnecting */
 				if logged == false {
-					R.Log_Lost.WriteString(fmt.Sprintf("%q\n", message))
+					R.Log_Lost.WriteString(fmt.Sprintf("%s\n", message))
 					logged = true
 				}
 				for {
