@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os/signal"
 )
 
 /*
@@ -34,8 +35,21 @@ type Router struct {
 	Log_Lost *os.File
 }
 
+/* globals !! oooo, nasty */
+var shutdown int
+var debug bool
+var daemon bool
+
 func usage() {
 	log.Fatal("usage: ./blproxy <in_redis:port> <out_redis:port>")
+}
+
+func shutdown_solver() {
+	/* keep it flaccid my friend */
+	if shutdown == 1 {
+		os.Exit(1)
+	}
+	shutdown = shutdown - 1
 }
 
 func log_lost_init() *os.File {
@@ -108,6 +122,17 @@ func (R *Router) redis_connect_out() error {
 
 func (R *Router) redis_pop_in(C chan *Redis_Pop, Keys []string) {
 	for {
+
+		if shutdown > 0 {
+			/* fail gracefully */
+			shutdown_solver()
+
+			/* keep it flaccid my friend */
+			pop := Redis_Pop{"shutdown", "shutdown"}
+			C <- &pop
+			return
+		}
+
 		res, err := R.In.BLPop(5, Keys...)
 		if err != nil {
 			log.Printf("redis_pop_in:BLPop:Err:%q\n", err)
@@ -132,7 +157,17 @@ func (R *Router) redis_push_out(C chan *Redis_Pop) {
 		for {
 			/* Reset logging in case our connection drops again */
 			logged = false
+
+			/* try to fail gracefully */
+			if shutdown > 0 {
+				shutdown_solver()
+				return
+			}
+
 			/* try this operation over and over again until we are successful */
+			if debug == true {
+				log.Printf("Push: %s %s\n", message.Key, message.Value);
+			}
 			_, err := R.Out.RPush(message.Key, message.Value)
 			if err != nil {
 				/* save locally, try reconnecting */
@@ -160,9 +195,38 @@ func (R *Router) redis_push_out(C chan *Redis_Pop) {
 
 func main() {
 
-	if len(os.Args) < 4 {
+	argc := len(os.Args)
+
+	if argc < 4 {
 		usage()
 	}
+
+	if argc > 4 {
+		for i := 4 ; i < argc; i++ {
+			arg := os.Args[i]
+			switch arg {
+				case "-D": {
+					daemon = true
+					debug = false
+					break
+				}
+				case "-v": {
+					daemon = false
+					debug = true
+					break
+				}
+				case "-d": {
+					daemon = false
+					debug = true
+					break
+				}
+				default: {
+				}
+			}
+		}
+	}
+
+	shutdown = 0
 
 	keys := os.Args[3:len(os.Args)]
 
@@ -171,6 +235,18 @@ func main() {
 	R := redis_init()
 
 	R.Log_Lost = log_lost_init()
+
+	/* handle sigint's */
+	sigch := make(chan os.Signal, 1)
+	signal.Notify(sigch, os.Interrupt, os.Kill)
+	go func() {
+		for sig := range sigch {
+			log.Println("interrupt handler fired, trying to shut down gracefully", sig, shutdown)
+			if shutdown == 0 {
+				shutdown = 2
+			}
+		}
+	}()
 
 	/* Limit of 1 to ensure we don't pop jobs when "out" is disconnected */
 	C := make(chan *Redis_Pop, 1)
