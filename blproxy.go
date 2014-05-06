@@ -52,8 +52,8 @@ func shutdown_solver() {
 	shutdown = shutdown - 1
 }
 
-func log_lost_init() *os.File {
-	f, err := os.OpenFile("blpop-proxy.lost.log", os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
+func log_lost_init(name string) *os.File {
+	f, err := os.OpenFile(fmt.Sprintf("blpop-proxy.lost.%s.log", name), os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
 	if err != nil {
 		log.Fatal("log_lost_init:OpenFile:blpop-proxy.lost.log:Err:", err)
 	}
@@ -121,6 +121,9 @@ func (R *Router) redis_connect_out() error {
 }
 
 func (R *Router) redis_pop_in(C chan *Redis_Pop, Keys []string) {
+}
+
+func (R *Router) redis_pop_in_key(C chan *Redis_Pop, Key string) {
 	for {
 
 		if shutdown > 0 {
@@ -133,7 +136,7 @@ func (R *Router) redis_pop_in(C chan *Redis_Pop, Keys []string) {
 			return
 		}
 
-		res, err := R.In.BLPop(5, Keys...)
+		res, err := R.In.BLPop(5, Key)
 		if err != nil {
 			log.Printf("redis_pop_in:BLPop:Err:%q\n", err)
 			time.Sleep(1 * time.Second)
@@ -232,10 +235,6 @@ func main() {
 
 	log.Printf("Initializing blpop-proxy with the following keys: %v\n", keys)
 
-	R := redis_init()
-
-	R.Log_Lost = log_lost_init()
-
 	/* handle sigint's */
 	sigch := make(chan os.Signal, 1)
 	signal.Notify(sigch, os.Interrupt, os.Kill)
@@ -250,8 +249,15 @@ func main() {
 
 	/* Limit of 1 to ensure we don't pop jobs when "out" is disconnected */
 	C := make(chan *Redis_Pop, 1)
-	go R.redis_pop_in(C, keys)
-	go R.redis_push_out(C)
+	for k, _ := range keys {
+		Rin := redis_init()
+		Rin.Log_Lost = log_lost_init(keys[k])
+		go Rin.redis_pop_in_key(C, keys[k])
+	}
+
+	Rout := redis_init()
+	Rout.Log_Lost = log_lost_init("outgoing")
+	go Rout.redis_push_out(C)
 
 	select {}
 }

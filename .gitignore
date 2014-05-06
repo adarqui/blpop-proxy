@@ -2,4 +2,5 @@ blpop-proxy
 pkg
 src
 blpop-proxy.lost.log
+blpop-proxy.*.log
 tmp
