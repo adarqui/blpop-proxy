@@ -78,7 +78,6 @@ func redis_parse_host_port(Arg string, RP *Redis_Params) {
 			redis_error("redis_parse_host_port:strconv:Err:", err2)
 		}
 		RP.Db = int64(db)
-		fmt.Println("DB",RP.Db)
 	}
 }
 
