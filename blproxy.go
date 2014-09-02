@@ -23,6 +23,7 @@ type Redis_Pop struct {
 type Redis_Params struct {
 	Host string
 	Port uint
+	Db int64
 }
 
 type Router struct {
@@ -70,6 +71,15 @@ func redis_parse_host_port(Arg string, RP *Redis_Params) {
 	}
 
 	RP.Port = uint(port)
+
+	if len(in_arr) > 2 {
+		db, err2 := strconv.Atoi(in_arr[2])
+		if err2 != nil {
+			redis_error("redis_parse_host_port:strconv:Err:", err2)
+		}
+		RP.Db = int64(db)
+		fmt.Println("DB",RP.Db)
+	}
 }
 
 func redis_init() *Router {
@@ -103,6 +113,7 @@ func (R *Router) redis_connect_in() error {
 		log.Printf("redis_connect:In:Err:%q", err)
 		return err
 	}
+	R.In.Select(R.In_Params.Db)
 	log.Printf("redis_connect:In:Connected to %v\n", R.In_Params)
 
 	return nil
@@ -115,6 +126,7 @@ func (R *Router) redis_connect_out() error {
 		log.Printf("redis_connect:Out:Err:%q", err)
 		return err
 	}
+	R.Out.Select(R.Out_Params.Db)
 	log.Printf("redis_connect:Out:Connected to %v\n", R.Out_Params)
 
 	return nil
